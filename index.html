@@ -628,8 +628,13 @@ function arranquePortal(){
     b.id = 'barraCore';
     b.style.cssText = 'background:#111;color:#fff;font-size:12.5px;padding:6px 12px;display:flex;justify-content:space-between;gap:8px';
     b.innerHTML = '<span>🔒 <b>' + esc(Portal.usuario.nombre) + '</b> · ' + esc(Portal.usuario.rol || '') + '</span>' +
-      (Portal.portal ? '<a href="' + esc(Portal.portal) + '" target="_top" style="color:#FDD402;font-weight:700;text-decoration:none">Portal Quick</a>' : '');
+      '<span style="display:flex;gap:12px">' + (Portal.puede('app01.configurar') ? '<a href="#" id="bConfigCore" style="color:#FDD402;font-weight:700;text-decoration:none">⚙ Configuración</a>' : '') +
+      (Portal.portal ? '<a href="' + esc(Portal.portal) + '" target="_top" style="color:#FDD402;font-weight:700;text-decoration:none">Portal Quick</a>' : '') + '</span>';
     document.body.prepend(b);
+    /* Configuración sin PIN: el servidor da un enlace de un solo uso (2 min) y lo abre en la misma pestaña */
+    const bc = document.getElementById('bConfigCore');
+    if (bc) bc.addEventListener('click', ev => { ev.preventDefault();
+      api('ticketConfig01').then(r => { window.open(r.url, '_top'); }).catch(e => toast(e.message, true)); });
     /* Solo las pestañas que su rol permite (el servidor igual lo valida) */
     const req = { reg: 'app01.registrar', sal: 'app01.registrar', imp: 'app01.imprimir', con: 'app01.ver' };
     const vis = $$('#tabs button[data-v]').filter(btn => { const ok = Portal.puede(req[btn.dataset.v]); btn.hidden = !ok; return ok; });
