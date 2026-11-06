@@ -922,19 +922,20 @@ function Camara(clave, shotSel, inputSel, galSel, linea, etiqueta){
     const { src, fecha } = cam.foto;
     const k = Math.min(1, maxLado / Math.max(src.width, src.height));
     const w = Math.round(src.width * k), h = Math.round(src.height * k);
-    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    // CAMBIO-040: la marca va DEBAJO de la foto, como un marco. La foto queda completa y nada la tapa.
+    const u = Math.min(Math.max(w, h) / 1000, w / 640), bandH = Math.round(150 * u), pl = Math.round(28 * u);
+    const c = document.createElement('canvas'); c.width = w; c.height = h + bandH;
     const x = c.getContext('2d');
     x.drawImage(src, 0, 0, w, h);
-    const u = Math.min(Math.max(w, h) / 1000, w / 640), bandH = Math.round(150 * u), pl = Math.round(28 * u);
-    x.fillStyle = 'rgba(11,11,11,.72)'; x.fillRect(0, h - bandH, w, bandH);
-    x.fillStyle = '#FDD402'; x.fillRect(0, h - bandH, Math.round(10 * u), bandH);
+    x.fillStyle = '#0B0B0B'; x.fillRect(0, h, w, bandH);
+    x.fillStyle = '#FDD402'; x.fillRect(0, h, Math.round(10 * u), bandH);
     x.textBaseline = 'alphabetic';
     x.fillStyle = '#FDD402'; x.font = '800 ' + Math.round(40 * u) + 'px "Plus Jakarta Sans", Arial, sans-serif';
-    x.fillText(fLarga(fecha), pl, h - bandH + Math.round(50 * u));
+    x.fillText(fLarga(fecha), pl, h + Math.round(50 * u));
     x.fillStyle = '#FFFFFF'; x.font = '600 ' + Math.round(24 * u) + 'px "Plus Jakarta Sans", Arial, sans-serif';
-    x.fillText(linea(), pl, h - bandH + Math.round(92 * u), w - pl * 2);
+    x.fillText(linea(), pl, h + Math.round(92 * u), w - pl * 2);
     x.fillStyle = 'rgba(255,255,255,.7)'; x.font = '700 ' + Math.round(17 * u) + 'px Arial, sans-serif';
-    x.fillText(etiqueta, pl, h - bandH + Math.round(128 * u), w - pl * 2);
+    x.fillText(etiqueta, pl, h + Math.round(128 * u), w - pl * 2);
     return c.toDataURL('image/jpeg', calidad);
   };
   cam.redibujar = () => {
