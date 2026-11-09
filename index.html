@@ -221,6 +221,10 @@ input[type=date].in{min-width:0;-webkit-appearance:none;appearance:none;min-heig
 .ph-card .tag{position:absolute;top:8px;left:8px;font-size:11px;font-weight:800;padding:4px 8px;border-radius:999px}
 .ph-card .tag.ingreso{background:var(--y);color:var(--k)}
 .ph-card .tag.salida{background:var(--k);color:var(--y)}
+.ph-card .tag.anul{top:auto;bottom:62px;left:8px;background:#C62828;color:#fff}
+.ph-card.anulado .im{opacity:.45}
+.vi .anul-box{margin-top:8px;padding:8px 10px;border-radius:10px;background:#FDECEA;color:#B71C1C;font-weight:700}
+.vi .btn-anular{margin-top:10px;min-height:44px;padding:0 16px;border-radius:12px;border:2px solid #C62828;background:#fff;color:#C62828;font-weight:800;font-size:15px}
 .ph-card .cb{padding:9px 10px 11px}
 .ph-card .cb b{display:block;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ph-card .cb span{display:block;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -318,7 +322,7 @@ input[type=date].in{min-width:0;-webkit-appearance:none;appearance:none;min-heig
 @page horiz{size:letter landscape;margin:0}
 @media print{
   html,body{background:#fff}
-  .app,.bar,.toast,.done,.viewer,.visor{display:none!important}
+  .app,.bar,.toast,.done,.viewer,.visor,#barraCore,#barraCiudad,#capaCiudad,#avisoVersion{display:none!important}   /* DEV-001: las barras del portal no se imprimen sobre el formato S+N */
   #print-root{display:block}
   #print-root .page{page-break-after:always;break-after:page}
   #print-root .page:last-child{page-break-after:auto;break-after:auto}
@@ -599,7 +603,7 @@ function ssSet(k, v){ try { sessionStorage.setItem(k, v); } catch(e){} }
 function ssDel(k){ try { sessionStorage.removeItem(k); } catch(e){} }
 
 /* ═══════════ Inicio ═══════════ */
-const APP_VERSION = '2026-10-19';
+const APP_VERSION = '2026-11-07';
 $('#snlogo').src = LOGO_SN;
 const tic = () => $$('.clk').forEach(el => el.textContent = fLarga(new Date()));
 setInterval(tic, 1000); tic();
@@ -1449,8 +1453,8 @@ function pintarConsulta(){
     return;
   }
   $('#q-res').innerHTML = '<div class="gal">' + Con.vis.map((x, i) =>
-    '<button class="ph-card" data-i="' + i + '"><div class="im" style="' + (x.miniatura ? 'background-image:url(\'' + x.miniatura + '\')' : '') + '">' + (x.miniatura ? '' : '📷') + '</div>' +
-    '<span class="tag ' + x.tipo + '">' + (x.tipo === 'ingreso' ? 'Ingreso lavado' : 'Check in salida') + '</span>' +
+    '<button class="ph-card' + (x.anulado ? ' anulado' : '') + '" data-i="' + i + '"><div class="im" style="' + (x.miniatura ? 'background-image:url(\'' + x.miniatura + '\')' : '') + '">' + (x.miniatura ? '' : '📷') + '</div>' +
+    '<span class="tag ' + x.tipo + '">' + (x.tipo === 'ingreso' ? 'Ingreso lavado' : 'Check in salida') + '</span>' + (x.anulado ? '<span class="tag anul">ANULADO</span>' : '') +
     '<div class="cb"><b>' + esc(x.codigo) + '</b><span>' + esc(fCorta(new Date(x.ts))) + '</span><span>' + esc(x.persona) + '</span></div></button>').join('') + '</div>';
 }
 $('#q-res').addEventListener('click', e => { const b = e.target.closest('.ph-card'); if (b) abrirVisor(+b.dataset.i); });
@@ -1462,6 +1466,8 @@ async function abrirVisor(i){
   $('#vw-i').innerHTML = '<b>' + esc(fLarga(new Date(x.ts))) + '</b> · ' + esc(x.persona) + '<br>' + esc(x.detalle) +
     (x.observaciones && x.observaciones !== 'NA' ? '<br>Obs.: ' + esc(x.observaciones) : '') +
     (x.fotoUrl ? '<br><a href="' + esc(x.fotoUrl) + '" target="_blank" rel="noopener">Abrir original en Drive ↗</a>' : '') +
+    (x.anulado ? '<div class="anul-box">⛔ ' + esc(x.anulacion || 'ANULADO') + '</div>' : '') +
+    (!x.anulado && (DEMO || (Portal.token && Portal.puede('app01.anular'))) ? '<button class="btn-anular" id="vw-anular">Anular este registro</button>' : '') +
     '<br><small>' + (Con.idx + 1) + ' de ' + Con.vis.length + '</small>';
   $('#vw-p').style.display = $('#vw-n').style.display = Con.vis.length > 1 ? '' : 'none';
   const img = $('#vw-img');
@@ -1473,6 +1479,21 @@ async function abrirVisor(i){
     } catch(_){}
   }
 }
+/* Anulación con motivo (CAMBIO-042): el registro no se borra ni se edita; queda ANULADO con quién, cuándo y por qué */
+$('#vw-i').addEventListener('click', async e => {
+  if (!e.target.closest('#vw-anular')) return;
+  const x = Con.vis[Con.idx]; if (!x) return;
+  const motivo = norm(prompt('Anular ' + (x.tipo === 'ingreso' ? 'el ingreso lavado' : 'el check in salida') + ' de ' + x.codigo + '.\n\nEscriba el motivo (mínimo 10 caracteres):') || '');
+  if (!motivo) return;
+  if (motivo.length < 10){ toast('El motivo debe tener al menos 10 caracteres', true); return; }
+  if (!confirm('¿Confirma la anulación? El registro deja de salir en la impresión y queda en la bitácora.')) return;
+  const b = e.target.closest('#vw-anular'); busy(b, true, 'Anulando…');
+  try {
+    const r = await api('anularRegistro', x.tipo, x.id, motivo);
+    x.anulado = true; x.anulacion = 'ANULADO por ' + r.anuladoPor + ' el ' + r.fecha + ' · Motivo: ' + motivo;
+    toast('Registro anulado'); pintarConsulta(); abrirVisor(Con.idx);
+  } catch(err){ toast(err.message, true); busy(b, false); }
+});
 function cerrarVisor(){ $('#viewer').classList.remove('show'); document.body.style.overflow = ''; }
 $('#vw-x').addEventListener('click', cerrarVisor);
 $('#vw-p').addEventListener('click', () => abrirVisor(Con.idx - 1));
@@ -1513,6 +1534,7 @@ const Mock = (() => {
     listarSalidas: async (a, b) => { await wait(350); return sal.filter(r => enRango(r.ts, a, b)); },
     prepararControl: async ids => { await wait(300); return sal.filter(r => ids.includes(r.id)).map(r => { if (!r.consecutivo) r.consecutivo = 'BGO - N° ' + (consec++); return Object.assign({}, r); }); },
     consultarCodigo: async (c, a, b) => { await wait(400); const out = []; ing.forEach(r => { if (r.serial.includes(c) && enRango(r.ts, a, b)) out.push({ tipo: 'ingreso', id: r.id, ts: r.ts, codigo: r.serial, persona: r.registradoPor, detalle: r.cicloNo + ' · Ciclo cumplido: ' + r.cumplido, observaciones: r.observaciones, fotoId: r.fotoId, miniatura: r.miniatura }); }); sal.forEach(r => { if (r.codigo.includes(c) && enRango(r.ts, a, b)) out.push({ tipo: 'salida', id: r.id, ts: r.ts, codigo: r.codigo, persona: r.revisadoPor, detalle: [r.consecutivo, r.estado].filter(Boolean).join(' · '), observaciones: r.observaciones, fotoId: r.fotoId, miniatura: r.miniatura }); }); return out.sort((x, y) => y.ts.localeCompare(x.ts)); },
+    anularRegistro: async (tipo, id, motivo) => { await wait(200); const r = (tipo === 'ingreso' ? ing : sal).find(x => x.id === id); if (!r) throw new Error('No se encontró el registro ' + id + '.'); if (r.anulado) throw new Error('Este registro ya estaba anulado.'); r.anulado = true; return { ok: true, id, anuladoPor: 'Demo', fecha: fCorta(new Date()) }; },
     getFotos: async ids => { await wait(250); return ids.map(id => { const r = ing.concat(sal).find(x => x.fotoId === id); return { id, data: r ? (r._foto || r.miniatura) : '' }; }); }
   };
 })();
